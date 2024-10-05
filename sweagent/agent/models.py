@@ -3,7 +3,9 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import math
 import os
+import time
 from collections import defaultdict
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -47,6 +49,8 @@ class ModelArguments(FrozenSerializable):
     replay_path: str | None = None
     # Host URL when using Ollama model
     host_url: str = "localhost:11434"
+    # Tokens per minute limit
+    tpm_limit: int = 1_000_000
 
 
 @dataclass
@@ -56,6 +60,7 @@ class APIStats(Serializable):
     tokens_sent: int = 0
     tokens_received: int = 0
     api_calls: int = 0
+    tokens_per_minute: int = 0
 
     def __add__(self, other):
         if not isinstance(other, APIStats):
@@ -123,6 +128,10 @@ class BaseModel:
             msg = f"Unregistered model ({args.model_name}). Add model name to MODELS metadata to {self.__class__}"
             raise ValueError(msg)
 
+        self.token_history = []
+        self.last_request_time = time.time()
+        self.tpm_limit = args.tpm_limit
+
     def reset_stats(self, other: APIStats | None = None):
         if other is None:
             self.stats = APIStats(total_cost=self.stats.total_cost)
@@ -153,6 +162,14 @@ class BaseModel:
         self.stats.tokens_received += output_tokens
         self.stats.api_calls += 1
 
+        # Update token history
+        current_time = time.time()
+        self.token_history.append((current_time, input_tokens + output_tokens))
+        self.token_history = [(time, tokens) for time, tokens in self.token_history if current_time - time <= 60]
+
+        # Calculate tokens per minute
+        self.stats.tokens_per_minute = sum(tokens for _, tokens in self.token_history)
+
         # Log updated cost values to std. err
         logger.debug(
             f"input_tokens={input_tokens:,}, "
@@ -178,6 +195,16 @@ class BaseModel:
             msg = "Instance cost limit exceeded"
             raise CostLimitExceededError(msg)
         return cost
+
+    def check_rate_limit(self, input_tokens: int, output_tokens: int) -> int:
+        """
+        Calculate the time to sleep to avoid rate limiting.
+        """
+        total_tokens = input_tokens + output_tokens
+        sleep_time = 0
+        if self.stats.tokens_per_minute + total_tokens > self.tpm_limit:
+            sleep_time = max(math.ceil(60 - (time.time() - self.last_request_time)), 0)
+        return sleep_time
 
     def query(self, history: list[dict[str, str]]) -> str:
         msg = "Use a subclass of BaseModel"
@@ -319,6 +346,15 @@ class OpenAIModel(BaseModel):
         Query the OpenAI API with the given `history` and return the response.
         """
         try:
+            # Estimate input tokens
+            estimated_input_tokens = sum(len(entry["content"].split()) for entry in history)
+
+            # Check rate limit before making the request
+            sleep_time = self.check_rate_limit(estimated_input_tokens, 0)
+            if sleep_time > 0:
+                logger.info(f"Rate limit approaching. Sleeping for {sleep_time} seconds.")
+                time.sleep(sleep_time)
+
             # Perform OpenAI API call
             response = self.client.chat.completions.create(
                 messages=self.history_to_messages(history),
@@ -329,6 +365,7 @@ class OpenAIModel(BaseModel):
         except BadRequestError:
             msg = f"Context window ({self.model_metadata['max_context']} tokens) exceeded"
             raise ContextWindowExceededError(msg)
+
         # Calculate + update costs, return response
         input_tokens = response.usage.prompt_tokens
         output_tokens = response.usage.completion_tokens
