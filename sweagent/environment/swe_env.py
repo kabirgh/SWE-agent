@@ -1270,19 +1270,22 @@ class SWEEnv(gym.Env):
                 timeout_duration=LONG_TIMEOUT,
             )
 
+    def _has_environment_setup(self) -> bool:
+        return self.args.environment_setup is not None and self.args.environment_setup != "no_setup"
+
     def _get_install_configs(self) -> dict | None:
         """Return config for environment setup"""
         assert self.record is not None  # mypy
         if (
             self.record["problem_statement_source"] != "swe-bench" or self.record["repo_type"] == "local"
-        ) and self.args.environment_setup is None:
+        ) and not self._has_environment_setup():
             self.logger.warning(
                 "install_environment is set to True, but the data path is a GitHub URL "
                 "without an environment config file (environment_config key/flag). "
                 "Skipping conda environment installation.",
             )
             return None
-        if self.args.environment_setup is not None:
+        if self._has_environment_setup():
             assert isinstance(self.args.environment_setup, (str, os.PathLike))
             if Path(self.args.environment_setup).suffix in [".yml", ".yaml"]:
                 try:
@@ -1301,11 +1304,12 @@ class SWEEnv(gym.Env):
             try:
                 return MAP_REPO_VERSION_TO_SPECS[self.record["repo"]][str(self.record["version"])]
             except KeyError as e:
-                msg = (
+                self.logger.warning(
                     "Tried to look up install configs in swe-bench, but failed. "
-                    "You can set a custom environment config with the environment_config key/flag."
+                    "You can set a custom environment config with the environment_config key/flag. "
+                    "Skipping environment setup."
                 )
-                raise ValueError(msg) from e
+            return None
 
     def _conda_environment_exists(self, env_name: str) -> bool:
         env_check = self.communicate(f"conda env list | grep {env_name}", timeout_duration=LONG_TIMEOUT)
