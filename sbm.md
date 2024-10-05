@@ -1,0 +1,11 @@
+python run.py \
+  --model_name gpt-4o-2024-08-06 \
+  --data_path plodq/sbm \
+  --split test \
+  --no_mirror \
+  --config_file config/default.yaml \
+  --per_instance_cost_limit 1.00 \
+  --total_cost_limit 50.00 \
+  --tpm_limit 350_000 \
+  --raise_exceptions \
+  --skip_existing
