@@ -196,13 +196,12 @@ class BaseModel:
             raise CostLimitExceededError(msg)
         return cost
 
-    def check_rate_limit(self, input_tokens: int, output_tokens: int) -> int:
+    def check_tpm_rate_limit(self, estimated_input_tokens: int) -> int:
         """
         Calculate the time to sleep to avoid rate limiting.
         """
-        total_tokens = input_tokens + output_tokens
         sleep_time = 0
-        if self.stats.tokens_per_minute + total_tokens > self.tpm_limit:
+        if self.stats.tokens_per_minute + estimated_input_tokens > self.tpm_limit:
             sleep_time = max(math.ceil(60 - (time.time() - self.last_request_time)), 0)
         return sleep_time
 
@@ -350,9 +349,9 @@ class OpenAIModel(BaseModel):
             estimated_input_tokens = sum(len(entry["content"].split()) for entry in history)
 
             # Check rate limit before making the request
-            sleep_time = self.check_rate_limit(estimated_input_tokens, 0)
+            sleep_time = self.check_tpm_rate_limit(estimated_input_tokens)
             if sleep_time > 0:
-                logger.info(f"Rate limit approaching. Sleeping for {sleep_time} seconds.")
+                logger.info(f"Tokens per minute rate limit approaching. Sleeping for {sleep_time} seconds.")
                 time.sleep(sleep_time)
 
             # Perform OpenAI API call
@@ -370,6 +369,9 @@ class OpenAIModel(BaseModel):
         input_tokens = response.usage.prompt_tokens
         output_tokens = response.usage.completion_tokens
         self.update_stats(input_tokens, output_tokens)
+        # Update last request time
+        self.last_request_time = time.time()
+
         return response.choices[0].message.content
 
 
