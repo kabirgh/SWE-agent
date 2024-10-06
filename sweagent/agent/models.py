@@ -196,14 +196,20 @@ class BaseModel:
             raise CostLimitExceededError(msg)
         return cost
 
-    def check_tpm_rate_limit(self, estimated_input_tokens: int) -> int:
+    def check_and_apply_tpm_rate_limit(self, estimated_input_tokens: int):
         """
-        Calculate the time to sleep to avoid rate limiting.
+        Check and apply rate limiting if necessary.
         """
         sleep_time = 0
         if self.stats.tokens_per_minute + estimated_input_tokens > self.tpm_limit:
+            # Calculate the time to sleep to avoid rate limiting.
             sleep_time = max(math.ceil(60 - (time.time() - self.last_request_time)), 0)
-        return sleep_time
+
+        if sleep_time > 0:
+            logger.info(f"Tokens per minute rate limit approaching. Sleeping for {sleep_time} seconds.")
+            time.sleep(sleep_time)
+
+        self.last_request_time = time.time()
 
     def query(self, history: list[dict[str, str]]) -> str:
         msg = "Use a subclass of BaseModel"
@@ -349,10 +355,7 @@ class OpenAIModel(BaseModel):
             estimated_input_tokens = sum(len(entry["content"].split()) for entry in history)
 
             # Check rate limit before making the request
-            sleep_time = self.check_tpm_rate_limit(estimated_input_tokens)
-            if sleep_time > 0:
-                logger.info(f"Tokens per minute rate limit approaching. Sleeping for {sleep_time} seconds.")
-                time.sleep(sleep_time)
+            self.check_and_apply_tpm_rate_limit(estimated_input_tokens)
 
             # Perform OpenAI API call
             response = self.client.chat.completions.create(
@@ -709,6 +712,11 @@ def anthropic_query(model: AnthropicModel | BedrockModel, history: list[dict[str
     # Get system message(s)
     system_message = "\n".join([entry["content"] for entry in history if entry["role"] == "system"])
     messages = anthropic_history_to_messages(model, history)
+
+    # Rate limit
+    prompt = "\n".join([x["content"] for x in messages])
+    estimated_input_tokens = model.api.count_tokens(prompt)
+    model.check_and_apply_tpm_rate_limit(estimated_input_tokens)
 
     # Perform Anthropic API call
     response = model.api.messages.create(
