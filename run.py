@@ -315,8 +315,8 @@ class Main:
         log_path = self.traj_dir / f"run-{timestamp}.log"
         logger.info("Logging to %s", log_path)
         add_file_handler(log_path)
-        if args.print_config:
-            logger.info(f"📙 Arguments: {args.dumps_yaml()}")
+        # if args.print_config:
+        #     logger.info(f"📙 Arguments: {args.dumps_yaml()}")
         self.args = args
         self.agent = Agent("primary", args.agent)
         self.env = SWEEnv(args.environment)
@@ -335,7 +335,7 @@ class Main:
 
     def run(self, index: int) -> None:
         # Reset environment
-        instance_id = self.env.data[index]["instance_id"]
+        instance_id = self.env.data[index]["instance_id"].strip()
         for hook in self.hooks:
             hook.on_instance_start(index=index, instance=self.env.data[index])
         assert isinstance(instance_id, str)  # mypy
@@ -442,6 +442,8 @@ class Main:
         if re.match(self.args.instance_filter, instance_id) is None:
             logger.info(f"⏭️ Instance filter not matched. Skipping instance {instance_id}")
             return True
+        else:
+            logger.info(f"✅ Instance filter matched for {instance_id}")
 
         # If flag is set to False, don't skip
         if not self.args.skip_existing:
