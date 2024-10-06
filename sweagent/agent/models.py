@@ -369,6 +369,17 @@ class OpenAIModel(BaseModel):
             msg = f"Context window ({self.model_metadata['max_context']} tokens) exceeded"
             raise ContextWindowExceededError(msg)
 
+        # Handle OpenRouter errors
+        if hasattr(response, "error"):
+            err = response.error["message"]
+            if "maximum context length" in err:
+                msg = f"Context window ({self.model_metadata['max_context']} tokens) exceeded"
+                raise ContextWindowExceededError(msg)
+            else:
+                msg = f"Failed to query OpenAI API: {str(err)}"
+                logger.error(msg)
+                raise RuntimeError(msg)
+
         # Calculate + update costs, return response
         input_tokens = response.usage.prompt_tokens
         output_tokens = response.usage.completion_tokens
@@ -890,14 +901,31 @@ class TogetherModel(BaseModel):
 class OpenRouterModel(OpenAIModel):
     MODELS = {
         "anthropic/claude-3.5-sonnet": {
-            "max_context": 8_192,
+            "max_context": 200_000,
+            "max_tokens": 8192,
             "cost_per_input_token": 3e-06,
             "cost_per_output_token": 15e-06,
+        },
+        "google/gemini-pro-1.5": {
+            "max_context": 2_000_000,
+            "max_tokens": 8192,
+            "cost_per_input_token": 3.5e-06,
+            "cost_per_output_token": 10.5e-06,
+        },
+        # https://openrouter.ai/models/deepseek/deepseek-chat
+        "deepseek/deepseek-chat": {
+            "max_context": 128_000,
+            "max_tokens": 4096,
+            "cost_per_input_token": 0.14e-06,  # assumes cheaper provider
+            "cost_per_output_token": 0.28e-06,
         },
     }
 
     SHORTCUTS = {
         "openrouter/anthropic/claude-3.5-sonnet": "anthropic/claude-3.5-sonnet",
+        "or/claude-3.5-sonnet": "anthropic/claude-3.5-sonnet",
+        "openrouter/google/gemini-pro-1.5": "google/gemini-pro-1.5",
+        "or/gemini-pro-1.5": "google/gemini-pro-1.5",
     }
 
     def __init__(self, args: ModelArguments, commands: list[Command]):
