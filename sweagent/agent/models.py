@@ -206,8 +206,9 @@ class BaseModel:
             sleep_time = max(math.ceil(60 - (time.time() - self.last_request_time)), 0)
 
         if sleep_time > 0:
-            logger.info(f"Tokens per minute rate limit approaching. Sleeping for {sleep_time} seconds.")
+            logger.info(f"[{time.time()}] Tokens per minute rate limit approaching. Sleeping for {sleep_time} seconds.")
             time.sleep(sleep_time)
+            logger.info(f"[{time.time()}] Finished sleeping.")
 
         self.last_request_time = time.time()
 
@@ -886,6 +887,27 @@ class TogetherModel(BaseModel):
         return response
 
 
+class OpenRouterModel(OpenAIModel):
+    MODELS = {
+        "anthropic/claude-3.5-sonnet": {
+            "max_context": 8_192,
+            "cost_per_input_token": 3e-06,
+            "cost_per_output_token": 15e-06,
+        },
+    }
+
+    SHORTCUTS = {
+        "openrouter/anthropic/claude-3.5-sonnet": "anthropic/claude-3.5-sonnet",
+    }
+
+    def __init__(self, args: ModelArguments, commands: list[Command]):
+        modified_args = ModelArguments(**{**args.__dict__, "model_name": args.model_name.replace("openrouter/", "")})
+        super().__init__(modified_args, commands)
+
+    def _setup_client(self) -> None:
+        self.client = OpenAI(api_key=keys_config["OPENROUTER_API_KEY"], base_url="https://openrouter.ai/api/v1")
+
+
 class HumanModel(BaseModel):
     MODELS = {"human": {}}
 
@@ -1067,6 +1089,8 @@ def get_model(args: ModelArguments, commands: list[Command] | None = None):
         return DeepSeekModel(args, commands)
     elif args.model_name in TogetherModel.SHORTCUTS:
         return TogetherModel(args, commands)
+    elif args.model_name in OpenRouterModel.SHORTCUTS:
+        return OpenRouterModel(args, commands)
     elif args.model_name in GroqModel.SHORTCUTS:
         return GroqModel(args, commands)
     elif args.model_name == "instant_empty_submit":
