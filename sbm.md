@@ -1,11 +1,11 @@
 python run.py \
-  --model_name gpt-4o-2024-08-06 \
+  --model_name claude-3-5-sonnet-20240620 \
   --data_path plodq/sbm \
   --split test \
   --no_mirror \
   --config_file config/default.yaml \
   --per_instance_cost_limit 1.00 \
   --total_cost_limit 50.00 \
-  --tpm_limit 350_000 \
+  --tpm_limit 35_000 \
   --raise_exceptions \
   --skip_existing
