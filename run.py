@@ -440,10 +440,10 @@ class Main:
         """Check if we should skip this instance based on the instance filter and skip_existing flag."""
         # Skip instances that don't match the instance filter
         if re.match(self.args.instance_filter, instance_id) is None:
-            logger.info(f"⏭️ Instance filter not matched. Skipping instance {instance_id}")
+            logger.info(f"⏭️ Instance filter not matched. Skipping instance {instance_id.strip()}")
             return True
         else:
-            logger.info(f"✅ Instance filter matched for {instance_id}")
+            logger.info(f"✅ Instance filter matched for {instance_id.strip()}")
 
         # If flag is set to False, don't skip
         if not self.args.skip_existing:
@@ -468,7 +468,7 @@ class Main:
             log_path.unlink()
             return False
 
-        logger.info(f"⏭️ Skipping existing trajectory: {log_path}")
+        logger.info(f"⏭️ Skipping existing trajectory: {str(log_path).strip()}")
         return True
 
     def _save_predictions(self, instance_id: str, info, challenge: dict[str, str] | None):
