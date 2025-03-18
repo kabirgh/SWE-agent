@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/root/python3.11/bin/python3
 
 import json
 import os
@@ -20,6 +20,7 @@ def main():
     state["open_file"] = open_file
     state["working_dir"] = os.getcwd()
     state_path.write_text(json.dumps(state))
+
 
 if __name__ == "__main__":
     main()
