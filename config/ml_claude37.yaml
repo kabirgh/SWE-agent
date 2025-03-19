@@ -36,6 +36,7 @@ agent:
   tools:
     execution_timeout: 300
     bundles:
+      - path: tools/ml_setup
       - path: tools/registry
       - path: tools/edit_anthropic
       - path: tools/review_on_submit_m
@@ -70,6 +71,6 @@ agent:
     max_output_tokens: 64000
     per_instance_cost_limit: 1.50
     per_instance_call_limit: 150
-    total_cost_limit: 1000.0
+    total_cost_limit: 500.0
     temperature: 0.0
     delay: 0.0
