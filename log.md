@@ -98,3 +98,9 @@ sweagent run-batch \
     --agent.model.name claude-3-7-sonnet-20250219
 
 Failed because tried to pull non-existent docker image
+
+## Env vars
+python not found, pip not found, javac not found, etc
+
+swe-rex process doesn't inherit docker env vars (see https://github.com/SWE-agent/SWE-ReX/issues/185)
+Workaround: tools/ml_setup/install.sh reads env vars from /proc/1/environ and adds them to the env.
