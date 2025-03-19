@@ -7,8 +7,18 @@ EXCLUDE_VARS="PWD|LANG|PYTHONPATH|ROOT|PS0|PS1|PS2|_|OLDPWD|LC_ALL|LANG|LSCOLORS
 echo "Original Environment Variables:"
 env | sort
 
-# Add standalone python3 & pip3 from swe-rex to PATH
-export PATH="/root/python3.11/bin:$PATH"
+# Only add Python 3.11 to PATH if no python exists
+if ! command -v python &> /dev/null; then
+    echo -e "\nNo Python found in system, adding Python 3.11 to PATH"
+    export PATH="/root/python3.11/bin:$PATH"
+
+    # Create python/pip aliases
+    ln -s "/root/python3.11/bin/python3" "/root/python3.11/bin/python"
+    ln -s "/root/python3.11/bin/pip3" "/root/python3.11/bin/pip"
+    echo "Created symlinks: python -> python3, pip -> pip3"
+else
+    echo -e "\nPython already exists in system, skipping Python 3.11 setup"
+fi
 
 # Attempt to read and set process 1 environment
 echo -e "\nSetting environment variables from /proc/1/environ..."
