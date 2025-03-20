@@ -3,7 +3,7 @@
 sweagent run-batch \
     --instances.type file \
     --instances.path /root/SWE-agent/instances.jsonl \
-    --instances.shuffle=False \
+    --instances.shuffle=True \
     --config config/ml_claude37.yaml \
     --num_workers=3
 
