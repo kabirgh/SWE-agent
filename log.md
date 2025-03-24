@@ -5,7 +5,7 @@ sweagent run-batch \
     --instances.path /root/SWE-agent/instances.jsonl \
     --instances.shuffle=True \
     --config config/ml_claude37.yaml \
-    --num_workers=3
+    --num_workers=4
 
 Updated after pulling latest main 17/03/2025.
 instances.jsonl no longer needs id. instance_id is now used instead.
