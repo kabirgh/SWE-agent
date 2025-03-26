@@ -60,7 +60,7 @@ const getActionName = (action) => {
 };
 
 // ActionItem component for individual timeline items
-const ActionItem = ({ action, index, viewportWidth, actionsLength, lineIndex, onClick }) => {
+const ActionItem = ({ action, index, viewportWidth, actionsLength, lineIndex, onClick, isSelected }) => {
   const indexInLine = index % ACTIONS_PER_LINE;
 
   // Calculate width for each action in a line
@@ -93,29 +93,69 @@ const ActionItem = ({ action, index, viewportWidth, actionsLength, lineIndex, on
     height: '28px',
     backgroundColor: color,
     position: 'absolute',
-    borderRadius: '0'
+    borderRadius: '0',
+    outline: isSelected ? '3px solid #000' : 'none',
+    outlineOffset: isSelected ? '-2px' : '0'
   };
 
   return (
     <div
-      className="absolute cursor-pointer transition-opacity duration-200 m-[1px] hover:opacity-80"
+      className="absolute cursor-pointer transition-all duration-200 m-[1px]"
       style={style}
       onClick={() => onClick(action)}
       title={`${actionName}${action.timestamp ? ` (${action.timestamp.toFixed(2)})` : ''}`}
       data-action-type={actionName}
-    />
+    >
+      {isSelected && (
+        <div className="absolute inset-0 flex items-center justify-center text-white font-medium">
+          {index + 1}
+        </div>
+      )}
+    </div>
   );
 };
 
 // Details panel component
-const ActionDetails = ({ action, onClose }) => {
+const ActionDetails = ({ action, onClose, demoId }) => {
+  const [output, setOutput] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchOutput = async () => {
+      if (!action?.details?.tool_call?.function?.arguments) return;
+
+      try {
+        const args = JSON.parse(action.details.tool_call.function.arguments);
+        const command = args.command || args.arguments || action.details.tool_call.function.arguments;
+
+        if (command) {
+          setLoading(true);
+          setError(null);
+          const response = await fetch(`/api/demos/${demoId}/command-output?command=${encodeURIComponent(command)}`);
+          if (!response.ok) {
+            throw new Error('Failed to fetch command output');
+          }
+          const data = await response.json();
+          setOutput(data.output);
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOutput();
+  }, [action, demoId]);
+
   if (!action) return null;
 
   // Get action name for display
   const actionName = getActionName(action);
 
   return (
-    <div className="bg-white mt-4 mb-2 rounded-sm border border-gray-200 relative">
+    <div className="bg-white mt-1 mb-2 rounded-sm border border-gray-200 relative">
       <button
         className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xl text-gray-500 hover:bg-gray-100 z-10 leading-none pb-1"
         onClick={onClose}
@@ -163,12 +203,28 @@ const ActionDetails = ({ action, onClose }) => {
           </div>
         )}
 
-        {/* Full details section */}
-        <div>
-          <h4 className="text-sm text-gray-500 mb-2">Full Details</h4>
-          <pre className="bg-gray-100 p-3 rounded text-xs leading-relaxed overflow-x-auto whitespace-pre-wrap break-words">
-            {JSON.stringify(action.details, null, 2)}
-          </pre>
+        {/* Output section - now shown for all action types */}
+        <div className="mb-6">
+          <div className="space-y-3">
+            <div className="flex">
+              <span className="w-[100px] text-gray-500 text-sm">Output</span>
+            </div>
+            <div>
+              {loading ? (
+                <div className="mt-1 bg-gray-100 p-3 rounded text-xs text-gray-500">
+                  Loading command output...
+                </div>
+              ) : error ? (
+                <div className="mt-1 bg-gray-100 p-3 rounded text-xs text-red-500">
+                  Error: {error}
+                </div>
+              ) : output ? (
+                <pre className="mt-1 bg-gray-100 p-3 rounded text-xs leading-relaxed overflow-x-auto whitespace-pre-wrap break-words">
+                  {output}
+                </pre>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -205,7 +261,7 @@ function Timeline({ data }) {
   const [selectedAction, setSelectedAction] = useState(null);
   const timelineRef = useRef(null);
 
-  const { actions = [] } = data;
+  const { actions = [], id: demoId } = data;
 
   // Calculate number of lines needed
   const linesNeeded = Math.ceil(actions.length / ACTIONS_PER_LINE);
@@ -241,42 +297,46 @@ function Timeline({ data }) {
         <ColorLegend />
       </div>
 
-      {/* Timeline visualization */}
-      <div className="flex-1 overflow-x-auto relative [scrollbar-height:8px] [scrollbar-track-color:#f1f1f1] [scrollbar-thumb-color:#c1c1c1] [scrollbar-thumb-radius:4px] [scrollbar-thumb-hover-color:#a0a0a0]">
-        <div
-          className="bg-gray-100 relative rounded mb-4"
-          ref={timelineRef}
-          style={{
-            width: '100%',
-            height: `${linesNeeded * LINE_HEIGHT}px`,
-            position: 'relative'
-          }}
-        >
-          {actions.map((action, index) => {
-            const lineIndex = Math.floor(index / ACTIONS_PER_LINE);
+      {/* Timeline visualization and details */}
+      <div className="flex flex-col">
+        <div className="overflow-x-auto relative [scrollbar-height:8px] [scrollbar-track-color:#f1f1f1] [scrollbar-thumb-color:#c1c1c1] [scrollbar-thumb-radius:4px] [scrollbar-thumb-hover-color:#a0a0a0]">
+          <div
+            className="bg-gray-100 relative rounded mb-4"
+            ref={timelineRef}
+            style={{
+              width: '100%',
+              height: `${linesNeeded * LINE_HEIGHT}px`,
+              position: 'relative'
+            }}
+          >
+            {actions.map((action, index) => {
+              const lineIndex = Math.floor(index / ACTIONS_PER_LINE);
 
-            return (
-              <ActionItem
-                key={index}
-                action={action}
-                index={index}
-                viewportWidth={viewportWidth}
-                actionsLength={actions.length}
-                lineIndex={lineIndex}
-                onClick={setSelectedAction}
-              />
-            );
-          })}
+              return (
+                <ActionItem
+                  key={index}
+                  action={action}
+                  index={index}
+                  viewportWidth={viewportWidth}
+                  actionsLength={actions.length}
+                  lineIndex={lineIndex}
+                  onClick={setSelectedAction}
+                  isSelected={selectedAction === action}
+                />
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* Action details panel */}
-      {selectedAction && (
-        <ActionDetails
-          action={selectedAction}
-          onClose={() => setSelectedAction(null)}
-        />
-      )}
+        {/* Action details panel */}
+        {selectedAction && (
+          <ActionDetails
+            action={selectedAction}
+            onClose={() => setSelectedAction(null)}
+            demoId={demoId}
+          />
+        )}
+      </div>
     </div>
   );
 }

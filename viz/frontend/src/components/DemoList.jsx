@@ -5,8 +5,19 @@ function DemoList({ demos, onSelectDemo, selectedDemo }) {
 
   // Filter demos based on search term
   const filteredDemos = demos.filter(demo =>
-    demo.name.toLowerCase().includes(searchTerm.toLowerCase())
+    demo.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'passed':
+        return 'text-green-600';
+      case 'failed':
+        return 'text-red-600';
+      default:
+        return 'text-gray-600';
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -36,13 +47,16 @@ function DemoList({ demos, onSelectDemo, selectedDemo }) {
           {filteredDemos.map(demo => (
             <li
               key={demo.id}
-              className={`px-4 py-3 rounded-md cursor-pointer transition-colors duration-200 mb-1 text-sm
+              className={`px-4 py-3 rounded-md cursor-pointer transition-colors duration-200 mb-1 text-sm flex items-center justify-between
                 ${selectedDemo === demo.id
                   ? 'bg-blue-100 text-blue-700 font-medium'
                   : 'hover:bg-gray-100'}`}
               onClick={() => onSelectDemo(demo.id)}
             >
-              {demo.name}
+              <span>{demo.id}</span>
+              <span className={`ml-2 ${getStatusColor(demo.status)}`}>
+                {demo.status === 'passed' ? '✓' : demo.status === 'failed' ? '✗' : '?'}
+              </span>
             </li>
           ))}
         </ul>
