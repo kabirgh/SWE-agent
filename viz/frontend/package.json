@@ -12,7 +12,9 @@
   "license": "ISC",
   "description": "Agent Timeline Visualization",
   "dependencies": {
+    "@ai-sdk/react": "^1.2.2",
     "@tailwindcss/vite": "^4.0.15",
+    "ai": "^4.2.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "sass": "^1.69.5"

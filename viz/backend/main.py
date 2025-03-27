@@ -4,7 +4,7 @@ import mmap
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Optional
 
 import yaml
 from fastapi import FastAPI, HTTPException
@@ -52,6 +52,21 @@ class DemoData(BaseModel):
     id: str
     status: str  # "passed" or "failed"
     actions: list[ActionInfo]
+
+
+class ChatMessage(BaseModel):
+    role: str  # 'user' or 'assistant'
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+    contextData: Optional[DemoData] = None
+
+
+class ChatResponse(BaseModel):
+    role: str
+    content: str
 
 
 def get_instance_status(instance_id: str) -> str:
@@ -219,6 +234,52 @@ async def get_command_output_endpoint(demo_id: str, command: str):
         return {"output": output}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching command output: {str(e)}")
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """Process a chat request using the timeline data as context"""
+    try:
+        # Get the latest user message
+        user_message = next((m for m in reversed(request.messages) if m.role == "user"), None)
+        if not user_message:
+            raise HTTPException(status_code=400, detail="No user message found")
+
+        # Create a context prompt from the timeline data
+        context = ""
+        if request.contextData:
+            context = f"Timeline data for demo {request.contextData.id} with status {request.contextData.status}. "
+
+            # Extract relevant action information
+            action_summaries = []
+            for i, action in enumerate(request.contextData.actions):
+                action_type = action.type or "message"
+                details = action.details
+                role = details.get("role", "unknown")
+                content_preview = str(details.get("content", ""))[:50]
+
+                action_summaries.append(f"Action {i + 1}: {action_type} from {role} - {content_preview}...")
+
+            if action_summaries:
+                context += "Actions include: " + "; ".join(action_summaries)
+
+        # Mock LLM response based on the context and user message
+        # In a real implementation, this would call an actual LLM API
+        response_content = f"I've analyzed the timeline data you're viewing. "
+
+        if "actions" in user_message.content.lower():
+            response_content += "The timeline shows a sequence of agent actions and messages. "
+        elif "status" in user_message.content.lower():
+            if request.contextData and request.contextData.status:
+                response_content += f"The demo status is: {request.contextData.status}. "
+            else:
+                response_content += "There's no status information available for this demo. "
+        else:
+            response_content += "You can ask me specific questions about the timeline actions, their sequence, or patterns in the agent's behavior. "
+
+        return ChatResponse(role="assistant", content=response_content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
 
 
 # Mount frontend static files (will be used after building the frontend)
