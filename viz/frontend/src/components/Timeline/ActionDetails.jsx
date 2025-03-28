@@ -22,7 +22,7 @@ const ActionDetails = ({ action, onClose, commandOutputs, isLoading, error }) =>
   }
 
   return (
-    <div className="bg-white mt-1 mb-2 rounded-sm border border-gray-200 relative">
+    <div className="bg-white mt-1 mb-2 rounded-sm border border-gray-200 relative max-h-[500px] overflow-y-auto">
       <button
         className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xl text-gray-500 hover:bg-gray-100 z-10 leading-none pb-1"
         onClick={onClose}

@@ -1,18 +1,29 @@
 import json
-import os
 import mmap
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
 import yaml
-from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
 from fastapi_cache.decorator import cache
+from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
+
+load_dotenv()
+
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY", "api-key-not-found"),
+)
 
 
 @asynccontextmanager
@@ -44,7 +55,7 @@ class DemoInfo(BaseModel):
 
 
 class ActionInfo(BaseModel):
-    details: dict[str, Any] = {}
+    details: dict = {}
     type: str | None = None
 
 
@@ -60,8 +71,8 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    messages: List[ChatMessage]
-    contextData: Optional[DemoData] = None
+    messages: list[ChatMessage]
+    contextData: DemoData | None = None
 
 
 class ChatResponse(BaseModel):
@@ -72,7 +83,7 @@ class ChatResponse(BaseModel):
 def get_instance_status(instance_id: str) -> str:
     """Get the status of a specific instance from the results file"""
     try:
-        with open(RESULTS_PATH, "r") as f:
+        with open(RESULTS_PATH) as f:
             results = json.load(f)
 
         if instance_id in results.get("resolved_ids", []):
@@ -179,7 +190,7 @@ async def get_demo(demo_id: str):
 
     # Load and parse the YAML file
     try:
-        with open(demo_path, "r") as file:
+        with open(demo_path) as file:
             yaml_data = yaml.safe_load(file)
 
         # Extract history items and convert them to actions
@@ -236,16 +247,51 @@ async def get_command_output_endpoint(demo_id: str, command: str):
         raise HTTPException(status_code=500, detail=f"Error fetching command output: {str(e)}")
 
 
-@app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
-    """Process a chat request using the timeline data as context"""
+def stream_text(messages: list[ChatCompletionMessageParam]):
+    """Stream chat completion responses"""
     try:
-        # Get the latest user message
-        user_message = next((m for m in reversed(request.messages) if m.role == "user"), None)
-        if not user_message:
-            raise HTTPException(status_code=400, detail="No user message found")
+        # Call OpenAI API via OpenRouter
+        stream = client.chat.completions.create(
+            model="google/gemini-2.0-flash-thinking-exp:free",
+            messages=messages,
+            stream=True,
+        )
 
-        # Create a context prompt from the timeline data
+        # Process the streaming response
+        for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                # Stream the response as JSON chunks - the key difference is we don't increment the index
+                # This allows the AI SDK to properly concatenate the chunks as one continuous message
+                content = chunk.choices[0].delta.content
+                yield f"0:{json.dumps(content)}\n"
+
+        # Send end of stream marker with token usage if available
+        usage = {}
+        if hasattr(chunk, "usage") and chunk.usage:
+            usage = {
+                "promptTokens": chunk.usage.prompt_tokens,
+                "completionTokens": chunk.usage.completion_tokens,
+            }
+        else:
+            usage = {"promptTokens": 0, "completionTokens": 0}
+
+        yield f'e:{{"finishReason":"stop","usage":{json.dumps(usage)},"isContinued":false}}\n'
+
+    except Exception as e:
+        # Handle errors in the streaming response
+        error_message = f"Error generating response: {str(e)}"
+        yield f"0:{json.dumps(error_message)}\n"
+        yield 'e:{"finishReason":"error","usage":{"promptTokens":0,"completionTokens":0},"isContinued":false}\n'
+
+
+@app.post("/api/chat")
+async def handle_chat(request: ChatRequest, protocol: str = Query("data")):
+    """Process a chat request and return a streaming response"""
+    try:
+        # Prepare messages for the API call
+        messages = []
+
+        # Add system message with context if available
         context = ""
         if request.contextData:
             context = f"Timeline data for demo {request.contextData.id} with status {request.contextData.status}. "
@@ -257,27 +303,26 @@ async def chat(request: ChatRequest):
                 details = action.details
                 role = details.get("role", "unknown")
                 content_preview = str(details.get("content", ""))[:50]
-
                 action_summaries.append(f"Action {i + 1}: {action_type} from {role} - {content_preview}...")
 
             if action_summaries:
                 context += "Actions include: " + "; ".join(action_summaries)
 
-        # Mock LLM response based on the context and user message
-        # In a real implementation, this would call an actual LLM API
-        response_content = f"I've analyzed the timeline data you're viewing. "
-
-        if "actions" in user_message.content.lower():
-            response_content += "The timeline shows a sequence of agent actions and messages. "
-        elif "status" in user_message.content.lower():
-            if request.contextData and request.contextData.status:
-                response_content += f"The demo status is: {request.contextData.status}. "
-            else:
-                response_content += "There's no status information available for this demo. "
+        if context:
+            messages.append(
+                {"role": "system", "content": f"You are an assistant helping analyze agent timelines. {context}"}
+            )
         else:
-            response_content += "You can ask me specific questions about the timeline actions, their sequence, or patterns in the agent's behavior. "
+            messages.append({"role": "system", "content": "You are an assistant helping analyze agent timelines."})
 
-        return ChatResponse(role="assistant", content=response_content)
+        # Add conversation history
+        for msg in request.messages:
+            messages.append({"role": msg.role, "content": msg.content})
+
+        # Return a streaming response
+        response = StreamingResponse(stream_text(messages))
+        response.headers["x-vercel-ai-data-stream"] = "v1"
+        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
 

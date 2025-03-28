@@ -1,5 +1,6 @@
 import React from 'react';
 import { useChat } from '@ai-sdk/react';
+import ReactMarkdown from 'react-markdown';
 
 function ChatPane({ contextData }) {
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
@@ -9,39 +10,68 @@ function ChatPane({ contextData }) {
     }
   });
 
+  // Custom styles for markdown content
+  const markdownStyles = {
+    pre: {
+      overflowX: 'auto',
+      whiteSpace: 'pre-wrap',
+      wordWrap: 'break-word',
+      maxWidth: '100%',
+    },
+    code: {
+      overflowX: 'auto',
+      whiteSpace: 'pre-wrap',
+      wordWrap: 'break-word',
+      maxWidth: '100%',
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-200">
-        <h2 className="text-lg font-medium text-gray-800">Chat Assistant</h2>
-        <p className="text-sm text-gray-500">Ask about the timeline data</p>
+    <div className="grid grid-rows-[auto_1fr_auto] h-full">
+      {/* Header */}
+      <div className="p-4 border-b border-gray-200 flex-shrink-0">
+        <h2 className="text-lg font-medium text-gray-800">Chat</h2>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 space-y-4">
-        {messages.map(message => (
-          <div
-            key={message.id}
-            className={`p-3 rounded-lg ${message.role === 'user'
-              ? 'bg-blue-100 ml-8'
-              : 'bg-gray-100 mr-8'
-              }`}
-          >
-            <div className="font-semibold text-xs text-gray-500 mb-1">
-              {message.role === 'user' ? 'You' : 'Assistant'}
+      {/* Messages container */}
+      <div className="overflow-y-auto min-h-0">
+        <div className="p-4 space-y-4">
+          {messages.map(message => (
+            <div
+              key={message.id}
+              className={`p-3 rounded-lg ${message.role === 'user'
+                ? 'bg-blue-100 ml-8'
+                : 'bg-gray-100 mr-8'
+                }`}
+            >
+              <div className="font-semibold text-xs text-gray-500 mb-1">
+                {message.role === 'user' ? 'You' : 'Assistant'}
+              </div>
+              <div className="text-sm prose prose-sm max-w-none">
+                <ReactMarkdown
+                  components={{
+                    pre: ({ node, ...props }) => <pre style={markdownStyles.pre} {...props} />,
+                    code: ({ node, ...props }) => <code style={markdownStyles.code} {...props} />
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
+              </div>
             </div>
-            <div className="text-sm">{message.content}</div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="p-3 rounded-lg bg-gray-100 mr-8">
-            <div className="font-semibold text-xs text-gray-500 mb-1">
-              Assistant
+          ))}
+          {isLoading && (
+            <div className="p-3 rounded-lg bg-gray-100 mr-8">
+              <div className="font-semibold text-xs text-gray-500 mb-1">
+                Assistant
+              </div>
+              <div className="text-sm">Thinking...</div>
             </div>
-            <div className="text-sm">Thinking...</div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      <div className="p-4 border-t border-gray-200">
+      {/* Input area - will always be at the bottom */}
+      <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0">
         <form onSubmit={handleSubmit} className="flex">
           <input
             type="text"
