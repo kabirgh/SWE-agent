@@ -78,7 +78,7 @@ function ChatPane({ contextData, contextId }) {
             type="text"
             value={input}
             onChange={handleInputChange}
-            placeholder="Ask about the timeline..."
+            placeholder="Ask about the trajectory"
             className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <button

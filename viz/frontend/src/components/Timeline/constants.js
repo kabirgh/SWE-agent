@@ -3,10 +3,10 @@ export const VIEW_FILE = 'View file/folder';
 export const EDIT_FILE = 'Edit file';
 export const CREATE_FILE = 'Create file';
 export const STR_REPLACE_EDITOR = 'str_replace_editor';
-export const BASH = 'bash';
-export const FIND_GREP = 'find/grep';
-export const SUBMIT = 'submit';
-export const UNKNOWN = 'unknown';
+export const BASH = 'Bash';
+export const FIND_GREP = 'Find/grep';
+export const SUBMIT = 'Submit';
+export const UNKNOWN = 'Unknown';
 
 // Cache key for localStorage
 export const COMMAND_OUTPUTS_CACHE_KEY = 'command_outputs_cache';

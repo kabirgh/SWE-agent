@@ -1,27 +1,25 @@
 import React from 'react';
-import { ACTION_COLORS, ACTIONS_PER_LINE, LINE_HEIGHT } from './constants';
+import { ACTION_COLORS, ACTIONS_PER_LINE, LINE_HEIGHT, FIND_GREP, VIEW_FILE, EDIT_FILE, CREATE_FILE, BASH, SUBMIT, UNKNOWN } from './constants';
 
 // Simple function to determine a step type from TrajectoryStep data
 const getStepType = (step) => {
   if (step.action) {
-    // Basic check for common command patterns or edit actions
     const actionLower = step.action.toLowerCase();
-    if (actionLower.includes('apply_edit') || actionLower.includes('diff') || actionLower.includes('patch')) {
-      return 'Edit';
+    if (actionLower.startsWith('find') || actionLower.startsWith('grep')) {
+      return FIND_GREP;
+    } else if (actionLower.startsWith('str_replace_editor view')) {
+      return VIEW_FILE;
+    } else if (actionLower.startsWith('str_replace_editor str_replace')) {
+      return EDIT_FILE;
+    } else if (actionLower.startsWith('str_replace_editor create')) {
+      return CREATE_FILE;
+    } else if (actionLower.startsWith('submit')) {
+      return SUBMIT;
+    } else {
+      return BASH;
     }
-    // Crude check for commands - might need refinement
-    if (actionLower.startsWith('bash') || actionLower.startsWith('run') || actionLower.startsWith('{') || actionLower.includes('command')) {
-      return 'Command';
-    }
-    return 'Action'; // Generic action fallback
   }
-  if (step.response) {
-    return 'Response'; // LLM Response
-  }
-  if (step.thought) {
-    return 'Thought';
-  }
-  return 'Unknown'; // Fallback for unknown steps
+  return UNKNOWN;
 };
 
 // Updated props: step, stepsLength instead of action, actionsLength
@@ -64,7 +62,7 @@ const ActionItem = ({ step, index, viewportWidth, stepsLength, lineIndex, onClic
 
   return (
     <div
-      className="absolute cursor-pointer transition-all duration-200 m-[1px]"
+      className="absolute cursor-pointer m-[1px]"
       style={style}
       onClick={() => onClick(step)} // Pass step object
       title={title} // Use updated title
