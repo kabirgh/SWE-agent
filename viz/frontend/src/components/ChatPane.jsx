@@ -2,11 +2,12 @@ import React from 'react';
 import { useChat } from '@ai-sdk/react';
 import ReactMarkdown from 'react-markdown';
 
-function ChatPane({ contextData }) {
+function ChatPane({ contextData, contextId }) {
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     body: {
-      // Pass timeline context to the API
-      contextData
+      // Pass both trajectoryData and trajectoryId to the API
+      contextData, // This is trajectoryData
+      contextId,   // This is selectedTrajectoryId
     }
   });
 

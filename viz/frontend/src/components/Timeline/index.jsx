@@ -2,40 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import ActionItem from './ActionItem';
 import ActionDetails from './ActionDetails';
 import ColorLegend from './ColorLegend';
-import { fetchAndCacheCommandOutputs } from './utils';
 import { ACTIONS_PER_LINE, LINE_HEIGHT } from './constants';
 
-// Main Timeline component
-function Timeline({ data }) {
+// Main Timeline component - Updated props
+function Timeline({ trajectoryData, selectedTrajectoryId }) {
   const [viewportWidth, setViewportWidth] = useState(0);
-  const [selectedAction, setSelectedAction] = useState(null);
-  const [commandOutputs, setCommandOutputs] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [selectedStep, setSelectedStep] = useState(null); // Renamed state
   const timelineRef = useRef(null);
 
-  const { actions = [], id: demoId } = data;
+  // Extract trajectory steps, default to empty array if not present
+  const steps = trajectoryData?.trajectory || [];
 
-  // Calculate number of lines needed
-  const linesNeeded = Math.ceil(actions.length / ACTIONS_PER_LINE);
-
-  // Fetch command outputs when component mounts
-  useEffect(() => {
-    const loadCommandOutputs = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const outputs = await fetchAndCacheCommandOutputs(actions, demoId);
-        setCommandOutputs(outputs);
-      } catch (err) {
-        setError(err.message);
-        console.error('Error loading command outputs:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadCommandOutputs();
-  }, [actions, demoId]);
+  // Calculate number of lines needed based on steps
+  const linesNeeded = Math.ceil(steps.length / ACTIONS_PER_LINE);
 
   // Resize handler for responsive timeline
   useEffect(() => {
@@ -50,20 +29,30 @@ function Timeline({ data }) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Automatically select the first action when timeline data is loaded
+  // Automatically select the first step when trajectory data is loaded
   useEffect(() => {
-    if (actions.length > 0) {
-      setSelectedAction(actions[0]);
+    if (steps.length > 0) {
+      setSelectedStep(steps[0]); // Select first step
+    } else {
+      setSelectedStep(null); // Clear selection if no steps
     }
-  }, [data]);
+  }, [trajectoryData]); // Depend on trajectoryData
+
+  // Handle potential null trajectoryData during loading or error states
+  if (!trajectoryData) {
+    // Optionally render a loading state or null
+    // Handled by App.jsx for now
+    return null;
+  }
 
   return (
     <div className="flex flex-col h-full p-4">
-      {/* Header with title and legend */}
+      {/* Header with title and legend - Updated to use trajectory info */}
       <div className="flex items-center justify-between py-2 mb-4">
         <div className="flex items-center">
-          <span className="mr-4 font-medium text-sm">{data.name}</span>
-          <span className="text-sm">{actions.length} actions</span>
+          {/* Display selectedTrajectoryId and step count */}
+          <span className="mr-4 font-medium text-sm">{selectedTrajectoryId}</span>
+          <span className="text-sm">{steps.length} steps</span>
         </div>
         <ColorLegend />
       </div>
@@ -80,33 +69,31 @@ function Timeline({ data }) {
               position: 'relative'
             }}
           >
-            {actions.map((action, index) => {
+            {/* Map over steps instead of actions */}
+            {steps.map((step, index) => {
               const lineIndex = Math.floor(index / ACTIONS_PER_LINE);
 
               return (
                 <ActionItem
                   key={index}
-                  action={action}
+                  step={step} // Pass step data
                   index={index}
                   viewportWidth={viewportWidth}
-                  actionsLength={actions.length}
+                  stepsLength={steps.length} // Pass total steps length
                   lineIndex={lineIndex}
-                  onClick={setSelectedAction}
-                  isSelected={selectedAction === action}
+                  onClick={setSelectedStep} // Update state setter
+                  isSelected={selectedStep === step} // Compare with selectedStep
                 />
               );
             })}
           </div>
         </div>
 
-        {/* Action details panel */}
-        {selectedAction && (
+        {/* Action details panel - Updated to use selectedStep */}
+        {selectedStep && (
           <ActionDetails
-            action={selectedAction}
-            onClose={() => setSelectedAction(null)}
-            commandOutputs={commandOutputs}
-            isLoading={isLoading}
-            error={error}
+            step={selectedStep} // Pass selected step data
+            onClose={() => setSelectedStep(null)} // Update state setter
           />
         )}
       </div>

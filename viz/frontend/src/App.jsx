@@ -1,50 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import DemoList from './components/DemoList';
+import TrajectoryList from './components/TrajectoryList';
 import Timeline from './components/Timeline';
 import ChatPane from './components/ChatPane';
 
 function App() {
-  const [demos, setDemos] = useState([]);
-  const [selectedDemo, setSelectedDemo] = useState(null);
-  const [timelineData, setTimelineData] = useState(null);
+  const [trajectories, setTrajectories] = useState([]);
+  const [selectedTrajectoryId, setSelectedTrajectoryId] = useState(null);
+  const [trajectoryData, setTrajectoryData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch the list of available demos
+  // Fetch the list of available trajectories
   useEffect(() => {
-    async function fetchDemos() {
+    async function fetchTrajectories() {
       try {
-        const response = await fetch('/api/demos');
+        const response = await fetch('/api/trajectories');
         if (!response.ok) {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
         const data = await response.json();
-        setDemos(data);
+        setTrajectories(data);
       } catch (error) {
-        console.error('Error fetching demos:', error);
-        setError('Failed to load demos.');
+        console.error('Error fetching trajectories:', error);
+        setError('Failed to load trajectories.');
       }
     }
 
-    fetchDemos();
+    fetchTrajectories();
   }, []);
 
-  // Load timeline data when a demo is selected
-  const handleDemoSelect = async (demoId) => {
+  // Load trajectory data when a trajectory is selected
+  const handleTrajectorySelect = async (trajectoryId) => {
     setLoading(true);
     setError(null);
+    setTrajectoryData(null);
 
     try {
-      const response = await fetch(`/api/demos/${demoId}`);
+      const response = await fetch(`/api/trajectories/${trajectoryId}`);
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
       const data = await response.json();
-      setSelectedDemo(demoId);
-      setTimelineData(data);
+      setSelectedTrajectoryId(trajectoryId);
+      setTrajectoryData(data);
     } catch (error) {
-      console.error('Error fetching timeline data:', error);
-      setError('Failed to load timeline data.');
+      console.error('Error fetching trajectory data:', error);
+      setError('Failed to load trajectory data.');
     } finally {
       setLoading(false);
     }
@@ -58,33 +59,35 @@ function App() {
 
       <main className="flex flex-1 overflow-hidden">
         <aside className="w-72 border-r border-gray-200 flex-shrink-0 overflow-y-auto">
-          <DemoList
-            demos={demos}
-            onSelectDemo={handleDemoSelect}
-            selectedDemo={selectedDemo}
+          <TrajectoryList
+            trajectories={trajectories}
+            onSelectTrajectory={handleTrajectorySelect}
+            selectedTrajectoryId={selectedTrajectoryId}
           />
         </aside>
 
         <section className="flex-1 overflow-auto">
           {loading && <div className="flex justify-center items-center h-full text-gray-500">Loading...</div>}
           {error && <div className="flex justify-center items-center h-full text-red-500 p-5 text-center">{error}</div>}
-          {!loading && !error && timelineData && (
+          {!loading && !error && trajectoryData && (
             <Timeline
-              data={timelineData}
+              trajectoryData={trajectoryData}
+              selectedTrajectoryId={selectedTrajectoryId}
             />
           )}
-          {!loading && !error && !timelineData && (
+          {!loading && !error && !trajectoryData && (
             <div className="flex justify-center items-center h-full text-gray-500 p-5 text-center">
-              <p>Select a demo from the list to view its timeline.</p>
+              <p>Select a trajectory from the list to view its timeline.</p>
             </div>
           )}
         </section>
 
-        {timelineData && (
+        {trajectoryData && (
           <aside className="w-96 border-l border-gray-200 flex-shrink-0 flex flex-col overflow-hidden">
             <ChatPane
-              key={selectedDemo}
-              contextData={timelineData}
+              key={selectedTrajectoryId}
+              contextData={trajectoryData}
+              contextId={selectedTrajectoryId}
             />
           </aside>
         )}

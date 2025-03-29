@@ -1,12 +1,10 @@
 import json
-import mmap
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-import yaml
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,28 +41,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Path to demos directory
-DEMOS_DIR = Path(__file__).parent.parent.parent / "demos"
 RESULTS_PATH = Path(__file__).parent / "c37results.json"
+# Path to trajectories directory (assuming the structure observed)
+TRAJECTORIES_BASE_DIR = (
+    Path(__file__).parent.parent.parent
+    / "trajectories"
+    / "root"
+    / "ml_claude37__claude-3-7-sonnet-20250219__t-0.00__p-1.00__c-1.50___instances"
+)
 
 
-class DemoInfo(BaseModel):
-    id: str
-    path: str
-    status: str  # "passed" or "failed"
+class TrajectoryStep(BaseModel):
+    action: str | None = None
+    observation: str | None = None
+    response: str | None = None
+    thought: str | None = None
+    execution_time: float | None = None
+    state: dict[str, Any] | None = None
+    messages: list[dict[str, Any]] | None = None
+    extra_info: dict[str, Any] | None = None
 
 
-class ActionInfo(BaseModel):
-    details: dict = {}
-    type: str | None = None
+class TrajectoryData(BaseModel):
+    trajectory: list[TrajectoryStep]
 
 
-class DemoData(BaseModel):
-    id: str
-    status: str  # "passed" or "failed"
-    actions: list[ActionInfo]
-
-
+# Models for Chat API
 class ChatMessage(BaseModel):
     role: str  # 'user' or 'assistant'
     content: str
@@ -72,12 +74,20 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
-    contextData: DemoData | None = None
+    contextData: TrajectoryData | None = None
+    contextId: str | None = None
 
 
 class ChatResponse(BaseModel):
     role: str
     content: str
+
+
+# Models for listing trajectories
+class TrajectoryInfo(BaseModel):
+    id: str
+    path: str
+    status: str
 
 
 def get_instance_status(instance_id: str) -> str:
@@ -100,151 +110,9 @@ def get_instance_status(instance_id: str) -> str:
         return "unknown"
 
 
-def get_command_output(log_path: Path, command: str) -> str | None:
-    """Extract command output from log file using memory mapping"""
-    try:
-        with open(log_path, "rb") as f:
-            # Memory map the file
-            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                # Convert command to bytes for searching
-                cmd_bytes = command.encode("utf-8")
-
-                # Find the command
-                pos = mm.find(cmd_bytes)
-                if pos == -1:
-                    return None
-
-                # Move to after the command
-                mm.seek(pos)
-
-                # Find OBSERVATION
-                while True:
-                    line = mm.readline().decode("utf-8")
-                    if not line:
-                        break
-                    if "OBSERVATION" in line:
-                        # Collect output until we hit the step separator
-                        output_lines = []
-                        while True:
-                            line = mm.readline().decode("utf-8")
-                            if not line or "========================= STEP" in line:
-                                break
-                            output_lines.append(line.strip())
-                        if output_lines:
-                            return "\n".join(output_lines)
-                        break
-
-    except Exception as e:
-        print(f"Error reading log file: {e}")
-    return None
-
-
 @app.get("/")
 async def root():
     return {"message": "Agent Timeline Visualizer API"}
-
-
-@app.get("/api/demos", response_model=list[DemoInfo])
-@cache(expire=60)
-async def get_demos():
-    """List all available demos"""
-    demos = []
-    subdirs = [d for d in os.listdir(DEMOS_DIR) if Path(DEMOS_DIR / d).is_dir()]
-
-    for subdir in subdirs:
-        yaml_files = list(Path(DEMOS_DIR / subdir).glob("*.yaml"))
-        yaml_files.extend(Path(DEMOS_DIR / subdir).glob("*.yml"))
-
-        for yaml_file in yaml_files:
-            # Remove .demo.yaml or .demo.yml suffix to get the actual demo ID
-            demo_id = yaml_file.name.replace(".demo.yaml", "").replace(".demo.yml", "")
-            status = get_instance_status(demo_id)
-            demo_info = DemoInfo(id=demo_id, path=str(yaml_file), status=status)
-            demos.append(demo_info)
-
-    demos.sort(key=lambda x: x.id)
-    return demos
-
-
-@app.get("/api/demos/{demo_id}", response_model=DemoData)
-async def get_demo(demo_id: str):
-    """Get detailed data for a specific demo"""
-    # Find the demo file
-    demo_path = None
-    subdirs = [d for d in os.listdir(DEMOS_DIR) if Path(DEMOS_DIR / d).is_dir()]
-
-    for subdir in subdirs:
-        yaml_files = list(Path(DEMOS_DIR / subdir).glob("*.yaml"))
-        yaml_files.extend(Path(DEMOS_DIR / subdir).glob("*.yml"))
-
-        for yaml_file in yaml_files:
-            current_id = yaml_file.name.replace(".demo.yaml", "").replace(".demo.yml", "")
-            if current_id == demo_id:
-                demo_path = str(yaml_file)
-                break
-        if demo_path:
-            break
-
-    if not demo_path:
-        raise HTTPException(status_code=404, detail="Demo not found")
-
-    # Load and parse the YAML file
-    try:
-        with open(demo_path) as file:
-            yaml_data = yaml.safe_load(file)
-
-        # Extract history items and convert them to actions
-        actions = []
-        for item in yaml_data.get("history", []):
-            action_details = {
-                "role": item.get("role"),
-                "content": item.get("content"),
-                "agent": item.get("agent"),
-                "message_type": item.get("message_type"),
-            }
-
-            # Process each tool call as a separate action
-            action_type = None
-            tool_calls = item.get("tool_calls") or []
-            assert len(tool_calls) <= 1, f"Expected 0 or 1 tool calls, got {len(tool_calls)}"
-            for tool_call in tool_calls:
-                action_type = tool_call.get("function", {}).get("name", "unknown")
-                action_details["tool_call"] = tool_call
-
-            actions.append(ActionInfo(type=action_type, details=action_details))
-
-        status = get_instance_status(demo_id)
-        return DemoData(id=demo_id, status=status, actions=actions)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing demo: {str(e)}")
-
-
-@app.get("/api/demos/{demo_id}/command-output")
-async def get_command_output_endpoint(demo_id: str, command: str):
-    """Get output for a specific command in a demo"""
-    try:
-        # Get log file path
-        log_path = (
-            Path(__file__).parent.parent.parent
-            / "trajectories"
-            / "root"
-            / "ml_claude37__claude-3-7-sonnet-20250219__t-0.00__p-1.00__c-1.50___instances"
-            / demo_id
-            / f"{demo_id}.info.log"
-        )
-
-        print(demo_id)
-
-        if not log_path.exists():
-            raise HTTPException(status_code=404, detail="Log file not found")
-
-        output = get_command_output(log_path, command)
-        if output is None:
-            raise HTTPException(status_code=404, detail="Command output not found")
-
-        return {"output": output}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching command output: {str(e)}")
 
 
 def stream_text(messages: list[ChatCompletionMessageParam]):
@@ -293,27 +161,50 @@ async def handle_chat(request: ChatRequest, protocol: str = Query("data")):
 
         # Add system message with context if available
         context = ""
-        if request.contextData:
-            context = f"Timeline data for demo {request.contextData.id} with status {request.contextData.status}. "
+        if request.contextId and request.contextData and request.contextData.trajectory:
+            context = f"Analyzing trajectory {request.contextId}. "
 
-            # Extract relevant action information
-            action_summaries = []
-            for i, action in enumerate(request.contextData.actions):
-                action_type = action.type or "message"
-                details = action.details
-                role = details.get("role", "unknown")
-                content_preview = str(details.get("content", ""))[:50]
-                action_summaries.append(f"Action {i + 1}: {action_type} from {role} - {content_preview}...")
+            # Extract relevant step information from TrajectoryData
+            step_summaries = []
+            for i, step in enumerate(request.contextData.trajectory):
+                summary_parts = []
+                # Add action if present
+                if step.action:
+                    action_preview = step.action.strip().split("\n")[0]
+                    summary_parts.append(f"Action: {action_preview[:70]}{'...' if len(action_preview) > 70 else ''}")
+                # Add observation if present (often command output)
+                if step.observation:
+                    obs_preview = step.observation.strip().split("\n")[0]
+                    summary_parts.append(f"Observation: {obs_preview[:70]}{'...' if len(obs_preview) > 70 else ''}")
+                # Add response if present
+                elif step.response:
+                    resp_preview = step.response.strip().split("\n")[0]
+                    summary_parts.append(f"Response: {resp_preview[:70]}{'...' if len(resp_preview) > 70 else ''}")
+                # Add thought if present
+                elif step.thought:
+                    thought_preview = step.thought.strip().split("\n")[0]
+                    summary_parts.append(f"Thought: {thought_preview[:70]}{'...' if len(thought_preview) > 70 else ''}")
 
-            if action_summaries:
-                context += "Actions include: " + "; ".join(action_summaries)
+                if summary_parts:
+                    step_summaries.append(f"Step {i + 1}: {'; '.join(summary_parts)}")
+
+            if step_summaries:
+                if len(step_summaries) > 10:
+                    context += "Key steps include: " + "; ".join(step_summaries[:5] + ["..."] + step_summaries[-5:])
+                else:
+                    context += "Steps include: " + "; ".join(step_summaries)
 
         if context:
             messages.append(
-                {"role": "system", "content": f"You are an assistant helping analyze agent timelines. {context}"}
+                {
+                    "role": "system",
+                    "content": f"You are an assistant helping analyze software engineering agent execution trajectories. {context}",
+                }
             )
         else:
-            messages.append({"role": "system", "content": "You are an assistant helping analyze agent timelines."})
+            messages.append(
+                {"role": "system", "content": "You are an assistant helping analyze agent execution trajectories."}
+            )
 
         # Add conversation history
         for msg in request.messages:
@@ -327,5 +218,52 @@ async def handle_chat(request: ChatRequest, protocol: str = Query("data")):
         raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
 
 
-# Mount frontend static files (will be used after building the frontend)
-# app.mount("/", StaticFiles(directory="../frontend/dist", html=True), name="static")
+@app.get("/api/trajectories", response_model=list[TrajectoryInfo])
+@cache(expire=3600)  # Cache for 1 hour. Note: this decorator must be after the fastapi endpoint decorator
+async def list_trajectories():
+    """List all available trajectory IDs"""
+    trajectories = []
+    if not TRAJECTORIES_BASE_DIR.exists() or not TRAJECTORIES_BASE_DIR.is_dir():
+        # Return empty list or raise an error if the base directory doesn't exist
+        return []
+
+    # List subdirectories which represent trajectory IDs
+    trajectory_dirs = [d for d in os.listdir(TRAJECTORIES_BASE_DIR) if (TRAJECTORIES_BASE_DIR / d).is_dir()]
+
+    for traj_id in trajectory_dirs:
+        # Construct the expected path for the .traj file
+        traj_file_path = TRAJECTORIES_BASE_DIR / traj_id / f"{traj_id}.traj"
+        if traj_file_path.exists():
+            status = get_instance_status(traj_id)
+            trajectories.append(TrajectoryInfo(id=traj_id, path=str(traj_file_path), status=status))
+
+    trajectories.sort(key=lambda x: x.id)
+    return trajectories
+
+
+@app.get("/api/trajectories/{trajectory_id}", response_model=TrajectoryData)
+@cache(expire=3600)
+async def get_trajectory(trajectory_id: str):
+    """Get detailed data for a specific trajectory"""
+    traj_file_path = TRAJECTORIES_BASE_DIR / trajectory_id / f"{trajectory_id}.traj"
+
+    if not traj_file_path.exists():
+        raise HTTPException(status_code=404, detail="Trajectory file not found")
+
+    try:
+        with open(traj_file_path) as f:
+            # Load the JSON data directly
+            data = json.load(f)
+
+            # Remove 'messages' field from each step in the trajectory
+            if "trajectory" in data and isinstance(data["trajectory"], list):
+                for step in data["trajectory"]:
+                    if isinstance(step, dict):
+                        step.pop("messages", None)
+
+            # Validate the data against the Pydantic model
+            return TrajectoryData(**data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Error decoding trajectory JSON file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing trajectory file: {str(e)}")
