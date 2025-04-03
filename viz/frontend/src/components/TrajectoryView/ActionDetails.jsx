@@ -41,23 +41,14 @@ const ActionDetails = ({ step, onClose }) => {
 
   return (
     <div className="bg-white mt-1 mb-2 rounded-sm border border-gray-200 relative overflow-y-auto">
-      <button
-        className="sticky top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xl text-gray-500 hover:bg-gray-100 z-10 leading-none pb-1 bg-white bg-opacity-75"
-        onClick={onClose}
-        aria-label="Close"
-      >
-        &#215;
-      </button>
       <div className="p-4 space-y-4">
-        {/* Display fields from the TrajectoryStep object */}
-        {renderDetailSection('Thought', step.thought, true)} {/* Preformatted thought */}
-        {renderDetailSection('Action', step.action, true)} {/* Preformatted action string */}
-        {renderDetailSection('Observation / Output', step.observation, true)} {/* Preformatted observation/output */}
-        {renderDetailSection('State', step.state, true, true)} {/* Formatted JSON state */}
-        {renderDetailSection('Execution Time (s)', step.execution_time?.toFixed(3))} {/* Formatted time */}
-        {renderDetailSection('Extra Info', step.extra_info, true, true)} {/* Formatted JSON extra info */}
+        {renderDetailSection('Thought', step.thought, true)}
+        {renderDetailSection('Action', step.action, true)}
+        {renderDetailSection('Observation / Output', step.observation, true)}
+        {renderDetailSection('State', step.state, true, true)}
+        {renderDetailSection('Execution Time (s)', step.execution_time?.toFixed(3))}
+        {renderDetailSection('Extra Info', step.extra_info, true, true)}
 
-        {/* Fallback if no details were rendered */}
         {!step.thought && !step.action && !step.observation && !step.response && !step.messages && !step.state && step.execution_time === undefined && !step.extra_info && (
           <div className="text-sm text-gray-500">No details available for this step.</div>
         )}

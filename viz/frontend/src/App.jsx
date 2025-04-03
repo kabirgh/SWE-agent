@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import TrajectoryList from './components/TrajectoryList';
-import Timeline from './components/Timeline';
+import TrajectoryView from './components/TrajectoryView';
 import ChatPane from './components/ChatPane';
 
 function App() {
@@ -70,7 +70,7 @@ function App() {
           {loading && <div className="flex justify-center items-center h-full text-gray-500">Loading...</div>}
           {error && <div className="flex justify-center items-center h-full text-red-500 p-5 text-center">{error}</div>}
           {!loading && !error && trajectoryData && (
-            <Timeline
+            <TrajectoryView
               trajectoryData={trajectoryData}
               selectedTrajectoryId={selectedTrajectoryId}
             />

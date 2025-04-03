@@ -1,5 +1,6 @@
 import React from 'react';
-import { ACTION_COLORS, ACTIONS_PER_LINE, LINE_HEIGHT, FIND_GREP, VIEW_FILE, EDIT_FILE, CREATE_FILE, BASH, SUBMIT, UNKNOWN } from './constants';
+// Import only necessary constants
+import { ACTION_COLORS, FIND_GREP, VIEW_FILE, EDIT_FILE, CREATE_FILE, BASH, SUBMIT, UNKNOWN } from './constants';
 
 // Simple function to determine a step type from TrajectoryStep data
 const getStepType = (step) => {
@@ -22,11 +23,21 @@ const getStepType = (step) => {
   return UNKNOWN;
 };
 
-// Updated props: step, stepsLength instead of action, actionsLength
-const ActionItem = ({ step, index, viewportWidth, stepsLength, lineIndex, onClick, isSelected }) => {
+// Destructure ACTIONS_PER_LINE and LINE_HEIGHT from props
+const ActionItem = ({
+  step,
+  index,
+  viewportWidth,
+  stepsLength,
+  lineIndex,
+  onClick,
+  isSelected,
+  ACTIONS_PER_LINE, // Add prop
+  LINE_HEIGHT // Add prop
+}) => {
   const indexInLine = index % ACTIONS_PER_LINE;
 
-  // Calculate width based on stepsLength
+  // Calculate width based on stepsLength using the prop
   const stepsInThisLine = Math.min(ACTIONS_PER_LINE, stepsLength - lineIndex * ACTIONS_PER_LINE);
 
   const maxWidth = viewportWidth / ACTIONS_PER_LINE;
@@ -47,9 +58,9 @@ const ActionItem = ({ step, index, viewportWidth, stepsLength, lineIndex, onClic
 
   const style = {
     left: `${position}px`,
-    top: `${lineIndex * LINE_HEIGHT}px`,
+    top: `${lineIndex * LINE_HEIGHT}px`, // Use prop
     width: `${width}px`,
-    height: '28px',
+    height: '28px', // Keep fixed height or pass LINE_HEIGHT if needed?
     backgroundColor: color,
     position: 'absolute',
     borderRadius: '0',
