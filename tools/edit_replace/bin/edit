@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/root/python3.11/bin/python3
 
 import argparse
 
@@ -155,7 +155,9 @@ def main(search: str, replace: str, replace_all: bool):
         without_edits = wf.get_window_text(line_numbers=True, status_line=True, pre_post_line=True)
         print(
             _LINT_ERROR_TEMPLATE.format(
-                errors=new_flake8_output, window_applied=with_edits, window_original=without_edits,
+                errors=new_flake8_output,
+                window_applied=with_edits,
+                window_original=without_edits,
             )
         )
         print(RETRY_WITH_OUTPUT_TOKEN)

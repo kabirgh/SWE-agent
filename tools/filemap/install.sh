@@ -1,2 +1,2 @@
-pip install 'tree-sitter==0.21.3'
-pip install 'tree-sitter-languages'
+pip3 install 'tree-sitter==0.21.3'
+pip3 install 'tree-sitter-languages'
