@@ -8,3 +8,4 @@ alwaysApply: false
 When editing Python files:
 - Organise the imports in the standard order, so that ruff doesn't complain
 - Favor native types instead of the typing library. Eg. use `dict` instead of `Dict`
+- Only write comments when they're useful. Comments like `# Import models from the new models file` above an import statement are not useful since the import statement tells me the same information very legibly
